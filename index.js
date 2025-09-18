@@ -1,5 +1,5 @@
 const express = require("express");
-const { ApolloServer } = require("apollo-server-express");
+const { ApolloServer, AuthenticationError } = require("apollo-server-express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
@@ -16,30 +16,48 @@ const startServer = async () => {
     typeDefs,
     resolvers,
     context: ({ req }) => {
-        const authHeader = req.headers.authorization || "";
-        const token = authHeader.replace("Bearer ", "");
-      
-        if (token) {
-          try {
-            const user = jwt.verify(token, process.env.JWT_SECRET);
-            return { user };
-          } catch (err) {
-            console.log("Invalid token");
-          }
-        }
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.replace("Bearer ", "");
+
+      console.log("LINE22", token);
+      if (!token) return {};
+
+      try {
+        const user = jwt.verify(token, process.env.JWT_SECRET || "secret");
+        return { user };
+      } catch (err) {
+        throw new AuthenticationError("Invalid or expired token");
       }
+    },
   });
 
   await server.start();
-  server.applyMiddleware({ app });
+  server.applyMiddleware({ app, path: "/graphql" });
 
-  await mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("MongoDB connected!"))
-    .catch((err) => console.log("MongoDB connection error:", err));
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log("✅ MongoDB connected!");
+  } catch (err) {
+    console.error("❌ MongoDB connection error:", err.message);
+    process.exit(1);
+  }
 
-  app.listen({ port: 4000 }, () =>
-    console.log(`🚀 Server ready at http://localhost:4000${server.graphqlPath}`)
-  );
+  const PORT = process.env.PORT || 4000;
+  const serverInstance = app.listen(PORT, () => {
+    console.log(`[${new Date().toISOString()}] 🚀 Server ready at http://localhost:${PORT}${server.graphqlPath}`);
+  });
+
+  process.on("SIGINT", async () => {
+    console.log("\n🛑 Shutting down server...");
+    await mongoose.disconnect();
+    serverInstance.close(() => {
+      console.log("✅ Server and MongoDB disconnected.");
+      process.exit(0);
+    });
+  });
 };
 
 startServer();
