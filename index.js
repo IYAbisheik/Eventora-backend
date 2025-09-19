@@ -19,7 +19,8 @@ const startServer = async () => {
       const authHeader = req.headers.authorization || "";
       const token = authHeader.replace("Bearer ", "");
 
-      console.log("LINE22", token);
+      console.log("LINE22", req.headers);
+
       if (!token) return {};
 
       try {
@@ -47,7 +48,9 @@ const startServer = async () => {
 
   const PORT = process.env.PORT || 4000;
   const serverInstance = app.listen(PORT, () => {
-    console.log(`[${new Date().toISOString()}] 🚀 Server ready at http://localhost:${PORT}${server.graphqlPath}`);
+    console.log(
+      `[${new Date().toISOString()}] 🚀 Server ready at http://localhost:${PORT}${server.graphqlPath}`
+    );
   });
 
   process.on("SIGINT", async () => {

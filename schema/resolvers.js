@@ -2,6 +2,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../modals/User");
 
+const generateUsername = (email) => {
+  return email.split("@")[0] + "_" + Date.now();
+};
+
 const resolvers = {
   Query: {
     me: async (_, __, { user }) => {
@@ -20,19 +24,32 @@ const resolvers = {
   Mutation: {
     register: async (_, { input }) => {
       const { firstname, lastname, username, email, phoneNumber, password } = input;
-    
-      const existingUser = await User.findOne({ 
-        $or: [{ email }, { username }, { phoneNumber }] 
+
+      const existingUser = await User.findOne({
+        $or: [{ email }, { username }, { phoneNumber }],
       });
-      if (existingUser) throw new Error("User with this email, username, or phone number already exists");
-    
+      if (existingUser)
+        throw new Error("User with this email, username, or phone number already exists");
+
       const hashedPassword = await bcrypt.hash(password, 10);
-    
-      const newUser = new User({ firstname, lastname, username, email, phoneNumber, password: hashedPassword });
+
+      const newUser = new User({
+        firstname,
+        lastname,
+        username,
+        email,
+        phoneNumber,
+        password: hashedPassword,
+      });
+
       const savedUser = await newUser.save();
-    
-      const token = jwt.sign({ id: savedUser._id, email: savedUser.email }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
-    
+
+      const token = jwt.sign(
+        { id: savedUser._id, email: savedUser.email },
+        process.env.JWT_SECRET || "secret",
+        { expiresIn: "7d" }
+      );
+
       return {
         token,
         user: savedUser,
@@ -53,9 +70,8 @@ const resolvers = {
       );
 
       return {
-        id: user._id,
-        ...user._doc,
         token,
+        user,
       };
     },
 
@@ -70,7 +86,20 @@ const resolvers = {
           await user.save();
         }
       } else {
-        user = new User({ email, googleId, firstname, lastname, photo });
+        // Create a new user
+        user = new User({
+          email,
+          googleId,
+          firstname,
+          lastname,
+          photo,
+        });
+
+        // Auto-generate username if missing
+        if (!user.username) {
+          user.username = generateUsername(email);
+        }
+
         await user.save();
       }
 
@@ -80,26 +109,35 @@ const resolvers = {
         { expiresIn: "7d" }
       );
 
-      const { password: pwd, ...userWithoutPassword } = user._doc;
-      return { user: userWithoutPassword, token };
+      return { token, user };
     },
 
-    updateUser: async (_, { firstname, lastname, username, phoneNumber, birthDate, gender }, { user }) => {
+    updateUser: async (
+      _,
+      { firstname, lastname, username, phoneNumber, birthDate, gender },
+      { user }
+    ) => {
       if (!user) throw new Error("Not authenticated");
-    
+
       // Check username uniqueness
       if (username) {
-        const existingUsername = await User.findOne({ username, _id: { $ne: user.id } });
+        const existingUsername = await User.findOne({
+          username,
+          _id: { $ne: user.id },
+        });
         if (existingUsername) throw new Error("Username already taken");
       }
-    
+
       // Check phone number uniqueness
       if (phoneNumber) {
-        const existingPhone = await User.findOne({ phoneNumber, _id: { $ne: user.id } });
+        const existingPhone = await User.findOne({
+          phoneNumber,
+          _id: { $ne: user.id },
+        });
         if (existingPhone) throw new Error("Phone number already taken");
       }
-    
-      // Convert birthDate string to Date if provided
+
+      // Prepare update data
       const updateData = {
         firstname,
         lastname,
@@ -108,13 +146,15 @@ const resolvers = {
         gender,
       };
       if (birthDate) updateData.birthDate = new Date(birthDate);
-    
-      const updatedUser = await User.findByIdAndUpdate(user.id, updateData, { new: true });
-    
+
+      const updatedUser = await User.findByIdAndUpdate(user.id, updateData, {
+        new: true,
+      });
+
       if (!updatedUser) throw new Error("User not found");
-    
+
       return updatedUser;
-    }
+    },
   },
 };
 
