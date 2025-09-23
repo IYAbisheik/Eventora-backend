@@ -5,6 +5,9 @@ const path = require("path");
 const { GraphQLUpload } = require("graphql-upload");
 const User = require("../modals/User");
 const Message = require("../modals/Message");
+const { PubSub } = require("graphql-subscriptions");
+const pubsub = new PubSub();
+const MESSAGE_SENT = "MESSAGE_SENT";
 
 const generateUsername = (email) => email.split("@")[0] + "_" + Date.now();
 
@@ -36,6 +39,25 @@ const resolvers = {
 
       return msgs;
     },
+
+      myConversations: async (_, __, { user }) => {
+        if (!user) throw new Error("Not authenticated");
+      
+        const msgs = await Message.find({
+          $or: [{ sender: user.id }, { receiver: user.id }],
+        })
+          .sort({ createdAt: -1 })
+          .populate("sender", "id username firstname lastname photo")
+          .populate("receiver", "id username firstname lastname photo");
+      
+        const usersMap = {};
+        msgs.forEach(msg => {
+          const partner = msg.sender.id === user.id ? msg.receiver : msg.sender;
+          usersMap[partner.id] = partner;
+        });
+      
+        return Object.values(usersMap);
+      }
   },
 
   User: {
@@ -126,7 +148,6 @@ const resolvers = {
     sendMessage: async (_, { toUserId, content }, { user }) => {
       if (!user) throw new Error("Not authenticated");
 
-      // Create message
       const createdMessage = await Message.create({
         sender: user.id,
         receiver: toUserId,
@@ -134,12 +155,10 @@ const resolvers = {
         createdAt: new Date(),
       });
 
-      // Populate sender and receiver before returning
       const message = await Message.findById(createdMessage._id)
         .populate("sender", "id username")
         .populate("receiver", "id username");
-
-      return message;
+        return message;
     },
 
     updateUser: async (
@@ -210,6 +229,24 @@ const resolvers = {
       if (!updatedUser) throw new Error("User not found");
 
       return updatedUser;
+    },
+  },
+
+  Subscription: {
+    messageSent: {
+      subscribe: (_, { conversationWith }, { user }) => {
+        if (!user) throw new Error("Not authenticated");
+        return pubsub.asyncIterator(MESSAGE_SENT);
+      },
+      resolve: (payload, args, { user }) => {
+        // Only deliver messages relevant to this conversation
+        const msg = payload.messageSent;
+        if (
+          msg.sender.id === args.conversationWith ||
+          msg.receiver.id === args.conversationWith
+        ) return msg;
+        return null; // ignore other messages
+      },
     },
   },
 };
