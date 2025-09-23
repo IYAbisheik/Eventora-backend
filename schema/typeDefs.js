@@ -2,6 +2,7 @@ const { gql } = require("apollo-server-express");
 
 const typeDefs = gql`
   scalar Date
+  scalar Upload 
 
   type User {
     id: ID!
@@ -13,6 +14,15 @@ const typeDefs = gql`
     birthDate: Date
     gender: String
     photo: String
+    organizer: Boolean
+  }
+
+  type Message {
+    id: ID!
+    sender: User!
+    receiver: User!
+    content: String!
+    createdAt: Date!
   }
 
   type AuthPayload {
@@ -29,6 +39,7 @@ const typeDefs = gql`
     lastname: String
     googleId: String
     photo: String
+    organizer: Boolean
   }
 
   input GoogleLoginInput {
@@ -42,12 +53,14 @@ const typeDefs = gql`
   type Query {
     me: User
     users: [User!]!
+    messages(conversationWith: ID!): [Message!]!
   }
 
   type Mutation {
     register(input: RegisterInput!): AuthPayload
     login(email: String!, password: String!): AuthPayload
     googleSignIn(input: GoogleLoginInput!): AuthPayload
+    sendMessage(toUserId: ID!, content: String!): Message!
     updateUser(
       firstname: String
       lastname: String
@@ -56,6 +69,7 @@ const typeDefs = gql`
       birthDate: Date
       gender: String
     ): User
+    uploadProfileImage(file: Upload!): User!   # ✅ new mutation
   }
 `;
 
