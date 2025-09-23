@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
   birthDate: { type: Date },
   gender: { type: String, enum: ["male", "female", "other"] },
   photo: { type: String }, 
+  organizer: { type: Boolean }
 });
 
 module.exports = mongoose.model("User", userSchema);
