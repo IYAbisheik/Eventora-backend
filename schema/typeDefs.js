@@ -50,10 +50,15 @@ const typeDefs = gql`
     photo: String
   }
 
+  type Subscription {
+    messageSent(conversationWith: ID!): Message!
+  }
+
   type Query {
     me: User
     users: [User!]!
     messages(conversationWith: ID!): [Message!]!
+    myConversations: [User!]!
   }
 
   type Mutation {
